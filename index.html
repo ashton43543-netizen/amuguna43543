@@ -183,7 +183,20 @@ main { display: grid; gap: 18px; padding-block: 20px 48px; }
 </div>
 
 <script>
+// ===== Firebase 설정: 아래 값을 Firebase 콘솔의 웹 앱 설정값으로 채우면 여러 명이 함께 쓰는 게시판이 됩니다. 비워두면 이 기기에만 저장되는 체험판으로 동작합니다. =====
+const FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  appId: "",
+};
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
 (() => {
+  const SHARED = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId && window.firebase);
   const CATS = [
     { id: "facility", label: "학교 시설" },
     { id: "program", label: "교내 프로그램" },
@@ -230,10 +243,15 @@ main { display: grid; gap: 18px; padding-block: 20px 48px; }
     try { const d = JSON.parse(ls.get(KEY, "null")); if (d && Array.isArray(d.questions)) return d; } catch {}
     return seed();
   }
-  let data = load();
-  let saveOk = ls.set(KEY, JSON.stringify(data));
-  const save = () => { saveOk = ls.set(KEY, JSON.stringify(data)); if (!saveOk) toast("이 브라우저에서는 저장이 안 돼요. 시크릿 창이라면 일반 창으로 열어주세요."); render(); };
-  window.addEventListener("storage", e => { if (e.key === KEY) { data = load(); render(); } });
+  let data = SHARED ? { questions: [], answers: [], likes: [] } : load();
+  let fs = null, loaded = !SHARED, canWrite = !SHARED;
+  const save = () => {
+    if (SHARED) { render(); return; }
+    if (!ls.set(KEY, JSON.stringify(data))) toast("이 브라우저에서는 저장이 안 돼요. 시크릿 창이라면 일반 창으로 열어주세요.");
+    render();
+  };
+  if (!SHARED) { ls.set(KEY, JSON.stringify(data)); window.addEventListener("storage", e => { if (e.key === KEY) { data = load(); render(); } }); }
+  const EXAMPLES = seed();
 
   // ---- helpers ----
   const $ = id => document.getElementById(id);
@@ -279,9 +297,11 @@ main { display: grid; gap: 18px; padding-block: 20px 48px; }
   $("search").addEventListener("input", e => { state.q = e.target.value.trim().toLowerCase(); render(); });
   $("sort").addEventListener("change", e => { state.sort = e.target.value; render(); });
 
-  $("status").replaceChildren(
+  const setStatus = (text, warn = false) => { const s = $("status"); s.replaceChildren(text); s.classList.toggle("warn", warn); };
+  if (!SHARED) $("status").replaceChildren(
     "이 화면은 설치나 로그인 없이 동작하는 체험판이에요. 글은 지금 쓰는 기기의 브라우저에만 저장돼요. ",
     el("button", { type: "button", class: "ghost", id: "resetBtn", text: "처음 상태로 되돌리기", onclick: () => askReset() }));
+  else setStatus("공유 게시판에 연결하는 중…");
   let resetArmed = false;
   function askReset() {
     const b = $("resetBtn");
@@ -303,13 +323,17 @@ main { display: grid; gap: 18px; padding-block: 20px 48px; }
 
   function render() {
     let items = viewModel();
+    const showEx = SHARED && loaded && items.length === 0;
+    if (showEx) { const keep = data; data = EXAMPLES; items = viewModel(); data = keep; }
     if (state.cat !== "all") items = items.filter(i => i.cat === state.cat);
     if (state.q) items = items.filter(i => (i.title + " " + (i.body || "") + " " + i.answers.map(a => a.body).join(" ")).toLowerCase().includes(state.q));
     if (state.sort === "new") items.sort((a, b) => b.createdAt - a.createdAt);
     if (state.sort === "like") items.sort((a, b) => b.likeCount - a.likeCount || b.createdAt - a.createdAt);
     if (state.sort === "open") items = items.filter(i => !i.solved).sort((a, b) => a.answerCount - b.answerCount || b.createdAt - a.createdAt);
     const kids = items.map(card);
-    if (!kids.length) kids.push(el("div", { class: "empty" }, el("strong", { text: "조건에 맞는 질문이 없어요" }), "분류나 검색어를 바꿔보거나, 직접 질문을 올려보세요."));
+    if (showEx) kids.unshift(el("div", { class: "empty" }, el("strong", { text: "아직 올라온 질문이 없어요" }), "위에서 첫 질문을 올려보세요. 아래는 어떤 모습이 되는지 보여주는 예시예요."), el("p", { class: "section-label", text: "예시 질문" }));
+    if (SHARED && !loaded && !kids.length) kids.push(el("div", { class: "empty" }, el("strong", { text: "질문을 불러오는 중이에요" })));
+    else if (!kids.length) kids.push(el("div", { class: "empty" }, el("strong", { text: "조건에 맞는 질문이 없어요" }), "분류나 검색어를 바꿔보거나, 직접 질문을 올려보세요."));
     $("list").replaceChildren(...kids);
   }
 
@@ -332,11 +356,12 @@ main { display: grid; gap: 18px; padding-block: 20px 48px; }
 
   function detail(it) {
     const mineQ = it.authorId === uid;
+    const ro = SHARED && (it.example || !canWrite);
     const d = el("div", { class: "detail" });
     if (it.body) d.append(el("p", { class: "body", text: it.body }));
     const actions = el("div", { class: "actions" },
-      el("button", { type: "button", class: "like", "aria-pressed": String(it.liked), text: `${it.liked ? "궁금해요 취소" : "나도 궁금해요"} · ${it.likeCount}`, onclick: () => toggleLike(it) }));
-    if (mineQ || it.example) actions.append(confirmable(`q:${it.id}`, "질문 삭제", () => deleteQuestion(it)));
+      el("button", { type: "button", class: "like", "aria-pressed": String(it.liked), disabled: ro, text: `${it.liked ? "궁금해요 취소" : "나도 궁금해요"} · ${it.likeCount}`, onclick: () => toggleLike(it) }));
+    if (mineQ || (it.example && !SHARED)) actions.append(confirmable(`q:${it.id}`, "질문 삭제", () => deleteQuestion(it)));
     d.append(actions);
 
     const ans = el("div", { class: "answers" }, el("h3", { text: it.answers.length ? `선배들의 답변 ${it.answers.length}` : "아직 답변이 없어요" }));
@@ -350,13 +375,14 @@ main { display: grid; gap: 18px; padding-block: 20px 48px; }
           el("span", { text: ago(a.createdAt) })),
         el("p", { class: "body", text: a.body }));
       const acts = el("div", { class: "actions" });
-      if (mineQ && !isAsker) acts.append(el("button", { type: "button", class: "ghost", text: a.accepted ? "채택 취소" : "이 답변 채택", onclick: () => accept(it, a) }));
+      if (mineQ && !isAsker && !ro) acts.append(el("button", { type: "button", class: "ghost", text: a.accepted ? "채택 취소" : "이 답변 채택", onclick: () => accept(it, a) }));
       if (a.authorId === uid) acts.append(confirmable(`a:${a.id}`, "답변 삭제", () => deleteAnswer(a)));
       if (acts.childNodes.length) row.append(acts);
       ans.append(row);
     }
     d.append(ans);
 
+    if (ro) { d.append(el("p", { class: "status", text: it.example ? "예시 질문에는 답변을 달 수 없어요. 직접 질문을 올려 시작해보세요." : "게시판에 연결된 뒤에 답변할 수 있어요." })); return d; }
     const ta = el("textarea", { id: `reply-${it.id}`, maxlength: "1500", placeholder: "내 경험을 바탕으로 알려주세요. 정확하지 않은 부분은 '확실하지 않아요'라고 적어주세요." });
     d.append(el("form", { class: "reply", autocomplete: "off", onsubmit: e => { e.preventDefault(); postAnswer(it, ta.value); } }, ta,
       el("div", { class: "reply-foot" },
@@ -377,35 +403,74 @@ main { display: grid; gap: 18px; padding-block: 20px 48px; }
     const title = $("askTitle").value.trim(), body = $("askBody").value.trim();
     if (!title) return;
     const q = { id: rid(), cat: $("askCat").value, grade: state.grade, title, body, authorId: uid, createdAt: Date.now(), acceptedId: null };
-    data.questions.push(q);
+    if (SHARED) {
+      if (!canWrite) { toast("아직 게시판에 연결되지 않았어요. 잠시 후 다시 시도해주세요."); return; }
+      const { id, ...doc } = q;
+      fs.collection("questions").doc(id).set(doc).catch(e => fail(e, "질문을 올리"));
+    } else data.questions.push(q);
     $("askTitle").value = ""; $("askBody").value = "";
     state.sort = "new"; $("sort").value = "new"; state.cat = "all"; drawChips(); state.open.add(q.id);
     save(); toast("질문을 올렸어요. 선배들의 답변을 기다려보세요.");
   });
   function postAnswer(it, text) {
     const body = text.trim(); if (!body) return;
-    data.answers.push({ id: rid(), qid: it.id, body, grade: state.grade, authorId: uid, createdAt: Date.now() });
+    const a = { qid: it.id, body, grade: state.grade, authorId: uid, createdAt: Date.now() };
+    if (SHARED) { fs.collection("answers").doc(rid()).set(a).then(() => toast("답변을 남겼어요. 고마워요!"), e => fail(e, "답변을 남기")); return; }
+    data.answers.push({ id: rid(), ...a });
     save(); toast("답변을 남겼어요. 고마워요!");
   }
   function toggleLike(it) {
+    if (SHARED) { const ref = fs.collection("likes").doc(it.id + "_" + uid); (it.liked ? ref.delete() : ref.set({ qid: it.id, uid })).catch(e => fail(e, "반영")); return; }
     if (it.liked) data.likes = data.likes.filter(l => !(l.qid === it.id && l.uid === uid));
     else data.likes.push({ qid: it.id, uid });
     save();
   }
   function accept(it, a) {
+    if (SHARED) { fs.collection("questions").doc(it.id).update({ acceptedId: a.accepted ? null : a.id }).then(() => toast(a.accepted ? "채택을 취소했어요." : "답변을 채택했어요."), e => fail(e, "채택")); return; }
     const q = data.questions.find(x => x.id === it.id); if (!q) return;
     q.acceptedId = a.accepted ? null : a.id; save(); toast(a.accepted ? "채택을 취소했어요." : "답변을 채택했어요.");
   }
   function deleteQuestion(it) {
+    if (SHARED) {
+      fs.collection("questions").doc(it.id).delete().then(() => { state.open.delete(it.id); toast("질문을 지웠어요."); }, e => fail(e, "삭제"));
+      return;
+    }
     data.questions = data.questions.filter(q => q.id !== it.id);
     data.answers = data.answers.filter(a => a.qid !== it.id);
     data.likes = data.likes.filter(l => l.qid !== it.id);
     state.open.delete(it.id); save(); toast("질문을 지웠어요.");
   }
   function deleteAnswer(a) {
+    if (SHARED) { fs.collection("answers").doc(a.id).delete().then(() => toast("답변을 지웠어요."), e => fail(e, "삭제")); return; }
     data.answers = data.answers.filter(x => x.id !== a.id);
     for (const q of data.questions) if (q.acceptedId === a.id) q.acceptedId = null;
     save(); toast("답변을 지웠어요.");
+  }
+
+  function fail(e, what) {
+    console.error(e);
+    if (e && e.code === "permission-denied") toast("권한이 없어서 하지 못했어요. 내가 쓴 글만 지우거나 채택할 수 있어요.");
+    else toast(`${what}하지 못했어요. 인터넷 연결을 확인하고 다시 시도해주세요.`);
+  }
+
+  if (SHARED) {
+    try {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      fs = firebase.firestore();
+    } catch (e) { console.error(e); setStatus("게시판 설정이 잘못됐어요. Firebase 설정값을 다시 확인해주세요.", true); }
+    const timer = setTimeout(() => setStatus("게시판에 아직 연결되지 않았어요. 인터넷 연결을 확인해주세요.", true), 10000);
+    if (fs) firebase.auth().signInAnonymously().then(cred => {
+      uid = cred.user.uid; canWrite = true;
+      const pending = new Set(["questions", "answers", "likes"]);
+      for (const name of pending) fs.collection(name).onSnapshot(snap => {
+        data[name] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (pending.delete(name) && !pending.size) {
+          clearTimeout(timer); loaded = true;
+          setStatus("누구나 볼 수 있는 공유 게시판이에요. 이름은 저장되지 않고 학년만 표시돼요.");
+        }
+        render();
+      }, e => { clearTimeout(timer); console.error(e); setStatus("게시판을 불러오지 못했어요. 잠시 후 페이지를 새로고침해주세요.", true); });
+    }, e => { clearTimeout(timer); console.error(e); setStatus("게시판에 들어가지 못했어요. Firebase에서 익명 로그인이 켜져 있는지 확인해주세요.", true); });
   }
 
   render();

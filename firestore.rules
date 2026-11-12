@@ -1,0 +1,42 @@
+rules_version = '2';
+// 선배노트 Firestore 보안 규칙
+// 누구나 읽을 수 있고, 글은 익명 로그인한 사람만 쓸 수 있으며, 자기 글만 지우거나 채택할 수 있다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isMine(d) { return signedIn() && d.authorId == request.auth.uid; }
+    function okGrade(g) { return g in [0, 1, 2, 3]; }
+    function okText(s, max) { return s is string && s.size() > 0 && s.size() <= max; }
+
+    match /questions/{id} {
+      allow read: if true;
+      allow create: if isMine(request.resource.data)
+        && request.resource.data.keys().hasOnly(['cat', 'grade', 'title', 'body', 'authorId', 'createdAt', 'acceptedId'])
+        && okText(request.resource.data.title, 80)
+        && request.resource.data.body is string && request.resource.data.body.size() <= 1500
+        && okGrade(request.resource.data.grade);
+      allow update: if isMine(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acceptedId']);
+      allow delete: if isMine(resource.data);
+    }
+
+    match /answers/{id} {
+      allow read: if true;
+      allow create: if isMine(request.resource.data)
+        && request.resource.data.keys().hasOnly(['qid', 'body', 'grade', 'authorId', 'createdAt'])
+        && okText(request.resource.data.body, 1500)
+        && request.resource.data.qid is string
+        && okGrade(request.resource.data.grade);
+      allow delete: if isMine(resource.data);
+    }
+
+    match /likes/{id} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['qid', 'uid'])
+        && request.resource.data.uid == request.auth.uid
+        && id == request.resource.data.qid + '_' + request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+  }
+}
