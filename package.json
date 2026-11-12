@@ -1,0 +1,14 @@
+{
+  "name": "classroom-meeting",
+  "version": "1.0.0",
+  "private": true,
+  "description": "먼저 각자 익명으로 쓰고, 한꺼번에 공개해 투표하는 학급회의 웹 프로그램",
+  "scripts": {
+    "dev": "firebase emulators:start --project demo-classroom",
+    "deploy": "firebase deploy --only firestore:rules,hosting",
+    "deploy:rules": "firebase deploy --only firestore:rules"
+  },
+  "devDependencies": {
+    "firebase-tools": "^15.0.0"
+  }
+}

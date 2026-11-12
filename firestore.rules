@@ -1,0 +1,107 @@
+rules_version = '2';
+
+// 우리반 회의 — Firestore 보안 규칙
+// 핵심: "마감 전에는 누구도(사회자 포함) 다른 사람의 의견을 읽을 수 없다"를 서버에서 강제한다.
+//
+// 진행 단계(phase): collect(의견 받기) → closed(마감·공개 준비) → reveal(공개·묶기) → vote(투표) → result(결과)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /meetings/{code} {
+      function signedIn() { return request.auth != null; }
+      function meetingPath() { return /databases/$(database)/documents/meetings/$(code); }
+      function meeting() { return get(meetingPath()).data; }
+      function isHost() { return signedIn() && meeting().hostUid == request.auth.uid; }
+      function changedOnly(keys) {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+      }
+      function myDoc(sub) {
+        return /databases/$(database)/documents/meetings/$(code)/$(sub)/$(request.auth.uid);
+      }
+
+      function validNewMeeting() {
+        let d = request.resource.data;
+        return d.hostUid == request.auth.uid
+          && d.phase == 'collect'
+          && d.opinionCount == 0
+          && d.voteCount == 0
+          && d.topic is string && d.topic.size() > 0 && d.topic.size() <= 200
+          && d.votesPerStudent is int && d.votesPerStudent >= 1 && d.votesPerStudent <= 5;
+      }
+
+      function hostUpdate() {
+        let d = request.resource.data;
+        return resource.data.hostUid == request.auth.uid
+          && d.hostUid == resource.data.hostUid
+          && d.opinionCount == resource.data.opinionCount
+          && d.voteCount == resource.data.voteCount
+          && d.phase in ['collect', 'closed', 'reveal', 'vote', 'result']
+          && d.votesPerStudent is int && d.votesPerStudent >= 1 && d.votesPerStudent <= 5;
+      }
+
+      // 학생: 의견을 처음 낼 때 같은 batch에서 제출 인원 +1
+      function opinionBump() {
+        return changedOnly(['opinionCount'])
+          && resource.data.phase == 'collect'
+          && request.resource.data.opinionCount == resource.data.opinionCount + 1
+          && !exists(myDoc('opinions'))
+          && existsAfter(myDoc('opinions'));
+      }
+
+      // 학생: 투표할 때 같은 batch에서 투표 인원 +1
+      function voteBump() {
+        return changedOnly(['voteCount'])
+          && resource.data.phase == 'vote'
+          && request.resource.data.voteCount == resource.data.voteCount + 1
+          && !exists(myDoc('votes'))
+          && existsAfter(myDoc('votes'));
+      }
+
+      allow read: if signedIn();
+      allow create: if signedIn() && validNewMeeting();
+      allow update: if signedIn() && (hostUpdate() || opinionBump() || voteBump());
+      allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+
+      // 원본 의견: 문서 ID = 익명 uid (1인 1의견). 마감 전에는 본인만 읽을 수 있다.
+      match /opinions/{uid} {
+        function validOpinion() {
+          let d = request.resource.data;
+          return d.keys().hasAll(['text', 'reason'])
+            && d.keys().hasOnly(['text', 'reason', 'at'])
+            && d.text is string && d.text.size() >= 1 && d.text.size() <= 300
+            && d.reason is string && d.reason.size() <= 300;
+        }
+        allow create: if signedIn() && uid == request.auth.uid
+          && meeting().phase == 'collect'
+          && validOpinion()
+          && getAfter(meetingPath()).data.opinionCount == meeting().opinionCount + 1;
+        allow update: if signedIn() && uid == request.auth.uid
+          && meeting().phase == 'collect'
+          && validOpinion();
+        allow read: if signedIn()
+          && (uid == request.auth.uid || (isHost() && meeting().phase != 'collect'));
+      }
+
+      // 공개용 의견 카드: 사회자가 마감 후 무작위 순서로 만든다. 작성자 정보 없음.
+      match /cards/{cardId} {
+        allow read: if signedIn()
+          && (meeting().phase in ['reveal', 'vote', 'result'] || isHost());
+        allow write: if isHost();
+      }
+
+      // 투표: 문서 ID = 익명 uid (1인 1회). 결과 단계 전에는 본인 것만 읽을 수 있다(중간 결과 숨김).
+      match /votes/{uid} {
+        allow create: if signedIn() && uid == request.auth.uid
+          && meeting().phase == 'vote'
+          && request.resource.data.keys().hasOnly(['choices', 'at'])
+          && request.resource.data.choices is list
+          && request.resource.data.choices.size() >= 1
+          && request.resource.data.choices.size() <= meeting().votesPerStudent
+          && request.resource.data.choices.toSet().size() == request.resource.data.choices.size()
+          && getAfter(meetingPath()).data.voteCount == meeting().voteCount + 1;
+        allow read: if signedIn()
+          && (uid == request.auth.uid || meeting().phase == 'result');
+      }
+    }
+  }
+}
