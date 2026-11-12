@@ -1,0 +1,16 @@
+{
+  "name": "sogon-class-meeting",
+  "version": "1.0.0",
+  "private": true,
+  "description": "먼저 익명으로 쓰고, 한꺼번에 공개하고, 공정하게 투표하는 학급회의 웹앱",
+  "scripts": {
+    "dev": "firebase emulators:start --project demo-classroom",
+    "deploy": "firebase deploy --only firestore:rules,hosting"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "firebase-tools": "^15.0.0"
+  }
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1F6F5C">
+  <meta name="description" content="먼저 익명으로 쓰고, 한꺼번에 공개하고, 공정하게 투표하는 학급회의">
+  <title>소곤소곤 학급회의</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231F6F5C'/%3E%3Crect x='10' y='14' width='32' height='22' rx='8' fill='%23fff'/%3E%3Crect x='24' y='28' width='30' height='20' rx='8' fill='%23FFCB47'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="practice-banner">연습 모드 · 데이터는 이 컴퓨터의 에뮬레이터에만 저장돼요</div>
+
+  <div id="app">
+    <div class="loading full"><span class="spinner"></span>불러오는 중…</div>
+  </div>
+
+  <div id="modal" class="modal"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <noscript>
+    <p style="padding:24px;text-align:center">이 앱을 쓰려면 브라우저의 자바스크립트를 켜 주세요.</p>
+  </noscript>
+
+  <!-- QR 코드 그리기 (MIT 라이선스, vendor/qrcode.js 머리말 참고) -->
+  <script src="vendor/qrcode.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
