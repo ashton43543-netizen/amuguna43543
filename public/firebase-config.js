@@ -12,10 +12,10 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 export const firebaseConfig = {
-  apiKey: "여기에_붙여넣기",
-  authDomain: "여기에_붙여넣기",
-  projectId: "여기에_붙여넣기",
-  storageBucket: "여기에_붙여넣기",
-  messagingSenderId: "여기에_붙여넣기",
-  appId: "여기에_붙여넣기",
+  apiKey: "AIzaSyDW6oQ84D7_Hatvag3ADVPNcCeLZQ8LdBo",
+  authDomain: "hakguomhae.firebaseapp.com",
+  projectId: "hakguomhae",
+  storageBucket: "hakguomhae.firebasestorage.app",
+  messagingSenderId: "1052553607911",
+  appId: "1:1052553607911:web:a40c62c51515d47f180042",
 };
