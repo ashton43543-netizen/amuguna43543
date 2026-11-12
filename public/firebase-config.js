@@ -1,10 +1,21 @@
-// Firebase 콘솔 → 프로젝트 설정 → 내 앱(웹 </>) 에서 복사한 값을 붙여 넣으세요.
-// (이 값들은 공개되어도 괜찮은 "주소" 정보입니다. 데이터 보호는 firestore.rules가 담당합니다.)
+// ─────────────────────────────────────────────────────────────────────────
+// Firebase 설정 파일
+//
+// Firebase 콘솔 → 프로젝트 설정(톱니바퀴) → 일반 → "내 앱" → 웹 앱 →
+// "SDK 설정 및 구성"에 나오는 firebaseConfig 값을 아래에 그대로 붙여 넣으세요.
+// (자세한 순서는 README.md 의 "실제로 배포하기"를 보세요.)
+//
+// 이 값들은 비밀번호가 아니라서 공개되어도 괜찮습니다.
+// 데이터는 firestore.rules(보안 규칙)가 지킵니다.
+//
+// 값을 채우지 않은 상태에서는 내 컴퓨터의 연습 모드(에뮬레이터)로만 동작합니다.
+// ─────────────────────────────────────────────────────────────────────────
+
 export const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: "여기에_붙여넣기",
+  authDomain: "여기에_붙여넣기",
+  projectId: "여기에_붙여넣기",
+  storageBucket: "여기에_붙여넣기",
+  messagingSenderId: "여기에_붙여넣기",
+  appId: "여기에_붙여넣기",
 };

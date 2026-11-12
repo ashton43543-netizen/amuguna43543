@@ -1,106 +1,238 @@
 rules_version = '2';
 
-// 우리반 회의 — Firestore 보안 규칙
-// 핵심: "마감 전에는 누구도(사회자 포함) 다른 사람의 의견을 읽을 수 없다"를 서버에서 강제한다.
+// ─────────────────────────────────────────────────────────────────────────
+// 소곤소곤 학급회의 — Firestore 보안 규칙
 //
-// 진행 단계(phase): collect(의견 받기) → closed(마감·공개 준비) → reveal(공개·묶기) → vote(투표) → result(결과)
+// 이 앱의 약속(익명·공정)은 화면에서 숨기는 것이 아니라 이 규칙으로 지킵니다.
+//
+//  meetings/{code}                 회의 한 개 (code = 참여 코드 6자리)
+//  meetings/{code}/members/{uid}   참여자 표시 (제출했는지·투표했는지 여부만)
+//  meetings/{code}/secrets/{uid}   본인만 읽을 수 있는 비밀 열쇠 2개
+//  meetings/{code}/opinions/{key}  마감 전 의견 (문서 이름 = 본인의 opKey)
+//  meetings/{code}/cards/{id}      공개된 의견 카드 (작성자 정보 없음)
+//  meetings/{code}/votes/{key}     투표 용지 (문서 이름 = 본인의 voteKey)
+//
+// 의견과 투표 용지의 문서 이름은 uid 가 아니라 본인만 아는 열쇠입니다.
+// 그래서 "한 사람당 하나"는 지키면서도, 나중에 용지가 공개되어도
+// 어느 참여자의 것인지 다른 사람이 연결할 수 없습니다.
+// ─────────────────────────────────────────────────────────────────────────
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function signedIn() {
+      return request.auth != null;
+    }
+
     match /meetings/{code} {
-      function signedIn() { return request.auth != null; }
-      function meetingPath() { return /databases/$(database)/documents/meetings/$(code); }
-      function meeting() { return get(meetingPath()).data; }
-      function isHost() { return signedIn() && meeting().hostUid == request.auth.uid; }
-      function changedOnly(keys) {
-        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
-      }
-      function myDoc(sub) {
-        return /databases/$(database)/documents/meetings/$(code)/$(sub)/$(request.auth.uid);
-      }
 
-      function validNewMeeting() {
-        let d = request.resource.data;
-        return d.hostUid == request.auth.uid
-          && d.phase == 'collect'
-          && d.opinionCount == 0
-          && d.voteCount == 0
-          && d.topic is string && d.topic.size() > 0 && d.topic.size() <= 200
-          && d.votesPerStudent is int && d.votesPerStudent >= 1 && d.votesPerStudent <= 5;
+      function meeting() {
+        return get(/databases/$(database)/documents/meetings/$(code)).data;
       }
-
-      function hostUpdate() {
-        let d = request.resource.data;
-        return resource.data.hostUid == request.auth.uid
-          && d.hostUid == resource.data.hostUid
-          && d.opinionCount == resource.data.opinionCount
-          && d.voteCount == resource.data.voteCount
-          && d.phase in ['collect', 'closed', 'reveal', 'vote', 'result']
-          && d.votesPerStudent is int && d.votesPerStudent >= 1 && d.votesPerStudent <= 5;
+      function isHost() {
+        return signedIn() && meeting().hostUid == request.auth.uid;
+      }
+      function memberPath(uid) {
+        return /databases/$(database)/documents/meetings/$(code)/members/$(uid);
+      }
+      // 내 비밀 열쇠. 아직 입장하지 않았다면 오류가 나서 규칙이 거부됩니다.
+      function mySecret() {
+        return get(/databases/$(database)/documents/meetings/$(code)/secrets/$(request.auth.uid)).data;
+      }
+      function opinionPath(key) {
+        return /databases/$(database)/documents/meetings/$(code)/opinions/$(key);
+      }
+      function votePath(key) {
+        return /databases/$(database)/documents/meetings/$(code)/votes/$(key);
+      }
+      function cardPath(id) {
+        return /databases/$(database)/documents/meetings/$(code)/cards/$(id);
       }
 
-      // 학생: 의견을 처음 낼 때 같은 batch에서 제출 인원 +1
-      function opinionBump() {
-        return changedOnly(['opinionCount'])
-          && resource.data.phase == 'collect'
-          && request.resource.data.opinionCount == resource.data.opinionCount + 1
-          && !exists(myDoc('opinions'))
-          && existsAfter(myDoc('opinions'));
+      // ── 회의 문서 ──────────────────────────────────────────────────────
+      // 코드를 아는 사람만 읽을 수 있도록 목록 조회(list)는 막습니다.
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn()
+        && code.matches('^[0-9]{6}$')
+        && request.resource.data.keys().hasAll(
+             ['topic', 'hostUid', 'phase', 'revealed', 'votesPerPerson', 'locked', 'timerEndsAt', 'createdAt'])
+        && request.resource.data.keys().hasOnly(
+             ['topic', 'hostUid', 'phase', 'revealed', 'votesPerPerson', 'locked', 'timerEndsAt', 'createdAt'])
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.topic is string
+        && request.resource.data.topic.size() > 0
+        && request.resource.data.topic.size() <= 120
+        && request.resource.data.phase == 'collect'
+        && request.resource.data.revealed == false
+        && request.resource.data.votesPerPerson in [1, 2, 3]
+        && request.resource.data.locked == false
+        && request.resource.data.timerEndsAt == null
+        && request.resource.data.createdAt == request.time;
+
+      // 사회자만, 정해진 항목만, 정해진 순서로만 바꿀 수 있습니다.
+      //   collect(의견 쓰기) → review(공개·정리) → vote(투표) → result(결과)
+      allow update: if signedIn()
+        && resource.data.hostUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+             ['phase', 'revealed', 'votesPerPerson', 'locked', 'timerEndsAt'])
+        && (
+             request.resource.data.phase == resource.data.phase
+          || (resource.data.phase == 'collect' && request.resource.data.phase == 'review')
+          || (resource.data.phase == 'review' && request.resource.data.phase == 'vote'
+              && resource.data.revealed == true)
+          || (resource.data.phase == 'vote' && request.resource.data.phase == 'result')
+        )
+        && (
+             request.resource.data.revealed == resource.data.revealed
+          || (resource.data.revealed == false && request.resource.data.revealed == true
+              && resource.data.phase == 'review' && request.resource.data.phase == 'review')
+        )
+        && request.resource.data.votesPerPerson in [1, 2, 3]
+        && (
+             request.resource.data.votesPerPerson == resource.data.votesPerPerson
+          || resource.data.phase in ['collect', 'review']
+        )
+        && request.resource.data.locked is bool
+        && (request.resource.data.timerEndsAt == null
+            || request.resource.data.timerEndsAt is timestamp);
+
+      allow delete: if false;
+
+      // ── 참여자 표시 ────────────────────────────────────────────────────
+      // 내용은 없고 "제출했음/투표했음" 여부만 있어서 진행 인원을 셀 수 있습니다.
+      match /members/{uid} {
+        allow read: if signedIn();
+
+        // 입장: 사회자가 입장을 잠그면 새로 들어올 수 없습니다(사회자 본인은 예외).
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && (meeting().locked == false || meeting().hostUid == request.auth.uid)
+          && request.resource.data.keys().hasAll(['submitted', 'voted'])
+          && request.resource.data.keys().hasOnly(['submitted', 'voted'])
+          && request.resource.data.submitted == false
+          && request.resource.data.voted == false;
+
+        // 표시는 false → true 로만, 그리고 실제 의견·투표 문서가 있을 때만 바뀝니다.
+        allow update: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasAll(['submitted', 'voted'])
+          && request.resource.data.keys().hasOnly(['submitted', 'voted'])
+          && (
+               request.resource.data.submitted == resource.data.submitted
+            || (request.resource.data.submitted == true
+                && meeting().phase == 'collect'
+                && existsAfter(opinionPath(mySecret().opKey)))
+          )
+          && (
+               request.resource.data.voted == resource.data.voted
+            || (request.resource.data.voted == true
+                && meeting().phase == 'vote'
+                && existsAfter(votePath(mySecret().voteKey)))
+          );
+
+        allow delete: if false;
       }
 
-      // 학생: 투표할 때 같은 batch에서 투표 인원 +1
-      function voteBump() {
-        return changedOnly(['voteCount'])
-          && resource.data.phase == 'vote'
-          && request.resource.data.voteCount == resource.data.voteCount + 1
-          && !exists(myDoc('votes'))
-          && existsAfter(myDoc('votes'));
+      // ── 비밀 열쇠 ──────────────────────────────────────────────────────
+      // 본인만 읽을 수 있고(사회자도 불가), 한 번 만들면 바꾸거나 지울 수 없습니다.
+      match /secrets/{uid} {
+        allow get: if signedIn() && request.auth.uid == uid;
+        allow list: if false;
+
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && existsAfter(memberPath(uid))
+          && request.resource.data.keys().hasAll(['opKey', 'voteKey'])
+          && request.resource.data.keys().hasOnly(['opKey', 'voteKey'])
+          && request.resource.data.opKey is string
+          && request.resource.data.opKey.matches('^[A-Za-z0-9]{24}$')
+          && request.resource.data.voteKey is string
+          && request.resource.data.voteKey.matches('^[A-Za-z0-9]{24}$')
+          && request.resource.data.opKey != request.resource.data.voteKey;
+
+        allow update, delete: if false;
       }
 
-      allow read: if signedIn();
-      allow create: if signedIn() && validNewMeeting();
-      allow update: if signedIn() && (hostUpdate() || opinionBump() || voteBump());
-      allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
-
-      // 원본 의견: 문서 ID = 익명 uid (1인 1의견). 마감 전에는 본인만 읽을 수 있다.
-      match /opinions/{uid} {
+      // ── 마감 전 의견 ───────────────────────────────────────────────────
+      match /opinions/{key} {
         function validOpinion() {
-          let d = request.resource.data;
-          return d.keys().hasAll(['text', 'reason'])
-            && d.keys().hasOnly(['text', 'reason', 'at'])
-            && d.text is string && d.text.size() >= 1 && d.text.size() <= 300
-            && d.reason is string && d.reason.size() <= 300;
+          return request.resource.data.keys().hasOnly(['text'])
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 200;
         }
-        allow create: if signedIn() && uid == request.auth.uid
+
+        // 내 의견은 나만 읽을 수 있습니다.
+        allow get: if signedIn() && mySecret().opKey == key;
+
+        // 사회자도 "마감한 뒤"에만 읽을 수 있습니다. 학생은 어느 단계에서도 못 읽습니다.
+        allow read: if isHost() && meeting().phase != 'collect';
+
+        // 한 사람당 하나: 문서 이름이 내 열쇠와 같아야 하고, 마감 전까지만 쓸 수 있습니다.
+        allow create: if signedIn()
           && meeting().phase == 'collect'
+          && mySecret().opKey == key
           && validOpinion()
-          && getAfter(meetingPath()).data.opinionCount == meeting().opinionCount + 1;
-        allow update: if signedIn() && uid == request.auth.uid
+          && getAfter(memberPath(request.auth.uid)).data.submitted == true;
+
+        allow update: if signedIn()
           && meeting().phase == 'collect'
+          && mySecret().opKey == key
           && validOpinion();
-        allow read: if signedIn()
-          && (uid == request.auth.uid || (isHost() && meeting().phase != 'collect'));
+
+        // 공개가 끝나면 사회자 기기가 원본을 지웁니다(카드로 옮긴 뒤).
+        allow delete: if isHost() && meeting().phase != 'collect';
       }
 
-      // 공개용 의견 카드: 사회자가 마감 후 무작위 순서로 만든다. 작성자 정보 없음.
+      // ── 공개된 의견 카드 ───────────────────────────────────────────────
       match /cards/{cardId} {
-        allow read: if signedIn()
-          && (meeting().phase in ['reveal', 'vote', 'result'] || isHost());
-        allow write: if isHost();
+        allow read: if signedIn() && meeting().phase != 'collect';
+
+        // 사회자가 "공개·정리" 단계에서만 만들고, 묶고, 가릴 수 있습니다.
+        // 투표가 시작되면 사회자도 카드를 바꿀 수 없습니다.
+        allow create, update: if isHost()
+          && meeting().phase == 'review'
+          && request.resource.data.keys().hasAll(['label', 'texts', 'order', 'hidden'])
+          && request.resource.data.keys().hasOnly(['label', 'texts', 'order', 'hidden'])
+          && request.resource.data.label is string
+          && request.resource.data.label.size() <= 200
+          && request.resource.data.texts is list
+          && request.resource.data.texts.size() <= 100
+          && request.resource.data.order is number
+          && request.resource.data.hidden is bool;
+
+        allow delete: if isHost() && meeting().phase == 'review';
       }
 
-      // 투표: 문서 ID = 익명 uid (1인 1회). 결과 단계 전에는 본인 것만 읽을 수 있다(중간 결과 숨김).
-      match /votes/{uid} {
-        allow create: if signedIn() && uid == request.auth.uid
+      // ── 투표 용지 ──────────────────────────────────────────────────────
+      match /votes/{key} {
+        function validChoice(id) {
+          return exists(cardPath(id)) && get(cardPath(id)).data.hidden == false;
+        }
+
+        // 투표 중에는 내 용지만 읽을 수 있습니다(사회자도 남의 용지는 못 봅니다).
+        // 결과 단계가 되면 모두가 읽어서 각자 기기에서 직접 집계합니다.
+        allow get: if signedIn()
+          && (meeting().phase == 'result' || mySecret().voteKey == key);
+        allow list: if signedIn() && meeting().phase == 'result';
+
+        // 한 사람당 용지 하나: 문서 이름이 내 열쇠와 같아야 하고, 고칠 수 없습니다.
+        allow create: if signedIn()
           && meeting().phase == 'vote'
-          && request.resource.data.keys().hasOnly(['choices', 'at'])
+          && mySecret().voteKey == key
+          && request.resource.data.keys().hasOnly(['choices'])
           && request.resource.data.choices is list
           && request.resource.data.choices.size() >= 1
-          && request.resource.data.choices.size() <= meeting().votesPerStudent
+          && request.resource.data.choices.size() <= meeting().votesPerPerson
           && request.resource.data.choices.toSet().size() == request.resource.data.choices.size()
-          && getAfter(meetingPath()).data.voteCount == meeting().voteCount + 1;
-        allow read: if signedIn()
-          && (uid == request.auth.uid || meeting().phase == 'result');
+          && validChoice(request.resource.data.choices[0])
+          && (request.resource.data.choices.size() < 2 || validChoice(request.resource.data.choices[1]))
+          && (request.resource.data.choices.size() < 3 || validChoice(request.resource.data.choices[2]))
+          && getAfter(memberPath(request.auth.uid)).data.voted == true;
+
+        allow update, delete: if false;
       }
     }
   }
