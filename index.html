@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>선배노트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+:root {{ padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }}
+body {{ margin: 0; }}
+[hidden] {{ display: none !important; }}
+/* Layout: one reading column like a school bulletin board; sticky header, filter chips, question cards that open in place */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #18202c;
+  --muted: #5b6676;
+  --line: #dce2ea;
+  --accent: #2346a8;
+  --accent-soft: #e6ecfb;
+  --mark: #ffe680;
+  --mark-ink: #4a3b00;
+  --good: #16794a;
+  --good-soft: #e1f3e8;
+  --danger: #b4282f;
+  --font-display: "Do Hyeon", "IBM Plex Sans KR", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --surface: #1a2029; --ink: #e8ecf2; --muted: #9aa5b5; --line: #2c3441;
+    --accent: #8ea8ff; --accent-soft: #232d48; --mark: #6b5a12; --mark-ink: #fff3c2;
+    --good: #5fd39a; --good-soft: #17322a; --danger: #ff7c82; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151c; --surface: #1a2029; --ink: #e8ecf2; --muted: #9aa5b5; --line: #2c3441;
+  --accent: #8ea8ff; --accent-soft: #232d48; --mark: #6b5a12; --mark-ink: #fff3c2;
+  --good: #5fd39a; --good-soft: #17322a; --danger: #ff7c82; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body);
+  font-size: 15px; line-height: 1.6;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.wrap { max-width: 760px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand h1 { font-family: var(--font-display); font-weight: 400; font-size: 28px; margin: 0; letter-spacing: .5px; }
+.brand h1 span { background: linear-gradient(transparent 58%, var(--mark) 58%); padding: 0 2px; }
+.brand p { margin: 0; color: var(--muted); font-size: 13px; }
+.me { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+select, input, textarea, button { font: inherit; color: inherit; }
+select, input[type="search"], input[type="text"], textarea {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0;
+}
+textarea { width: 100%; resize: vertical; min-height: 84px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button { cursor: pointer; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 12px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+button.ghost { border-color: transparent; background: transparent; color: var(--muted); padding: 4px 8px; }
+button.ghost:hover { color: var(--ink); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+main { display: grid; gap: 18px; padding-block: 20px 48px; }
+
+.intro { display: grid; gap: 6px; }
+.intro h2 { font-family: var(--font-display); font-weight: 400; font-size: 24px; margin: 0; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); max-width: 62ch; }
+.status { font-size: 13px; color: var(--muted); }
+.status.warn { color: var(--danger); }
+
+.ask { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; }
+.ask-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ask-row > input { flex: 1 1 240px; }
+.ask-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.lock { display: inline-flex; align-items: center; gap: 6px; }
+.lock svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+.filters { display: grid; gap: 10px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.tools input { flex: 1 1 200px; }
+
+.list { display: grid; gap: 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.card.open { border-color: var(--accent); }
+.q-head { display: grid; gap: 6px; padding: 14px 16px; cursor: pointer; text-align: left; width: 100%; border: 0; background: transparent; border-radius: 12px; }
+.meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.tag { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; letter-spacing: .2px; }
+.tag.solved { background: var(--good-soft); color: var(--good); }
+.tag.example { background: var(--mark); color: var(--mark-ink); }
+.q-title { font-size: 16.5px; font-weight: 600; margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+.counts { display: flex; gap: 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.detail { border-top: 1px solid var(--line); padding: 14px 16px 16px; display: grid; gap: 14px; }
+.body { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.like[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.answers { display: grid; gap: 10px; }
+.answers h3 { margin: 0; font-size: 14px; color: var(--muted); font-weight: 600; letter-spacing: .3px; }
+.ans { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+.ans.accepted { border-color: var(--good); background: var(--good-soft); }
+.who { font-weight: 600; color: var(--ink); }
+.who.senior { color: var(--accent); }
+.reply { display: grid; gap: 8px; }
+.reply-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.empty { text-align: center; padding: 28px 16px; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
+.empty strong { color: var(--ink); display: block; font-size: 16px; margin-bottom: 4px; }
+.section-label { font-size: 12.5px; color: var(--muted); letter-spacing: .4px; margin: 6px 0 0; }
+.confirm { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--danger); }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 8px 16px; border-radius: 999px; font-size: 14px; z-index: 20; }
+.rules { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+.rules ul { margin: 6px 0 0; padding-left: 18px; }
+@media (prefers-reduced-motion: no-preference) { .card { transition: border-color .15s; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1><span>선배노트</span></h1>
+      <p>익명으로 묻고, 선배가 답해요</p>
+    </div>
+    <label class="me" for="myGrade">나는
+      <select id="myGrade">
+        <option value="1">1학년</option>
+        <option value="2">2학년</option>
+        <option value="3">3학년</option>
+        <option value="0">졸업생</option>
+      </select>
+    </label>
+  </div>
+</header>
+
+<div class="wrap">
+<main>
+  <section class="intro">
+    <h2>아는 선배가 없어도 괜찮아요</h2>
+    <p>이름은 어디에도 표시되지 않고 학년만 보여요. 시설 이용법, 교내 프로그램, 수행평가, 진로 고민까지 편하게 물어보세요.</p>
+    <div id="status" class="status"></div>
+  </section>
+
+  <form id="askForm" class="ask" autocomplete="off">
+    <div class="ask-row">
+      <select id="askCat" aria-label="분류"></select>
+      <input id="askTitle" type="text" maxlength="80" placeholder="질문 제목 (예: 3층 자습실은 몇 시까지 열어요?)" required>
+    </div>
+    <textarea id="askBody" maxlength="1500" placeholder="자세한 상황을 적어주면 선배들이 답하기 쉬워요. 이름, 반, 번호 같은 개인정보는 쓰지 마세요."></textarea>
+    <div class="ask-foot">
+      <span class="lock"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>익명 · <span id="askAs">1학년</span>으로 올라가요</span>
+      <button class="primary" type="submit" id="askBtn">질문 올리기</button>
+    </div>
+  </form>
+
+  <section class="filters" aria-label="질문 찾기">
+    <div class="chips" id="catChips"></div>
+    <div class="tools">
+      <input id="search" type="search" placeholder="검색 (예: 동아리, 생기부)">
+      <select id="sort" aria-label="정렬">
+        <option value="new">최신순</option>
+        <option value="like">궁금해요순</option>
+        <option value="open">답변 기다리는 질문</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="list" id="list" aria-live="polite"></section>
+
+  <section class="rules">
+    <strong>함께 지키는 약속</strong>
+    <ul>
+      <li>특정 학생이나 선생님을 비난하거나 알아볼 수 있게 쓰지 않아요.</li>
+      <li>답변은 내 경험이라는 걸 밝히고, 학교 공지와 다를 수 있다는 점을 기억해요.</li>
+      <li>도움이 된 답변은 질문한 사람이 <b>채택</b>해서 다음 후배도 볼 수 있게 해요.</li>
+    </ul>
+  </section>
+</main>
+</div>
+
+<script>
+(() => {
+  const CATS = [
+    { id: "facility", label: "학교 시설" },
+    { id: "program", label: "교내 프로그램" },
+    { id: "assess", label: "수행평가" },
+    { id: "career", label: "진로·학업" },
+    { id: "life", label: "학교생활 고민" },
+  ];
+  const catLabel = id => (CATS.find(c => c.id === id) || { label: "기타" }).label;
+  const gradeLabel = g => Number(g) === 0 ? "졸업생" : `${g}학년`;
+  const seniorRank = g => Number(g) === 0 ? 9 : Number(g);
+  const KEY = "seonbae-note-v1";
+
+  // ---- local storage layer (this browser only) ----
+  const ls = {
+    get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
+  };
+  const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  let uid = ls.get("sn-uid", null);
+  if (!uid) { uid = rid(); ls.set("sn-uid", uid); }
+
+  function seed() {
+    const t = Date.now(), H = 3600e3;
+    const other = "example";
+    const q1 = "ex1", q2 = "ex2", q3 = "ex3";
+    return {
+      questions: [
+        { id: q1, example: true, cat: "facility", grade: 1, title: "도서관 노트북 대여는 어떻게 해요?", body: "수행평가 자료 조사하려는데 도서관에서 노트북을 빌릴 수 있다고 들었어요. 신청서가 따로 있나요?", authorId: other, createdAt: t - 3 * H, acceptedId: "ea1" },
+        { id: q2, example: true, cat: "assess", grade: 1, title: "국어 발표 수행평가, PPT 꼭 만들어야 하나요?", body: "발표 수행평가가 처음이라 걱정돼요. 선배들은 어떻게 준비했어요?", authorId: other, createdAt: t - 26 * H, acceptedId: null },
+        { id: q3, example: true, cat: "career", grade: 2, title: "진로 동아리 바꾸면 생기부에 불리할까요?", body: "1학년 때 들었던 동아리랑 지금 관심 분야가 달라졌어요.", authorId: other, createdAt: t - 50 * H, acceptedId: null },
+      ],
+      answers: [
+        { id: "ea1", qid: q1, grade: 2, body: "점심시간에 사서 선생님께 학생증 맡기면 바로 빌려줘요. 대신 도서관 안에서만 쓸 수 있고 5교시 시작 전에 반납해야 해요.", authorId: "example-a", createdAt: t - 2 * H },
+        { id: "ea2", qid: q2, grade: 3, body: "작년엔 PPT 필수는 아니었는데 있으면 점수 받기 편했어요. 평가 기준표를 꼭 먼저 받아서 항목별로 대본을 짜보세요.", authorId: "example-b", createdAt: t - 20 * H },
+      ],
+      likes: [
+        ...Array.from({ length: 7 }, (_, i) => ({ qid: q1, uid: "ex-l" + i })),
+        ...Array.from({ length: 12 }, (_, i) => ({ qid: q2, uid: "ex-m" + i })),
+        ...Array.from({ length: 4 }, (_, i) => ({ qid: q3, uid: "ex-n" + i })),
+      ],
+    };
+  }
+  function load() {
+    try { const d = JSON.parse(ls.get(KEY, "null")); if (d && Array.isArray(d.questions)) return d; } catch {}
+    return seed();
+  }
+  let data = load();
+  let saveOk = ls.set(KEY, JSON.stringify(data));
+  const save = () => { saveOk = ls.set(KEY, JSON.stringify(data)); if (!saveOk) toast("이 브라우저에서는 저장이 안 돼요. 시크릿 창이라면 일반 창으로 열어주세요."); render(); };
+  window.addEventListener("storage", e => { if (e.key === KEY) { data = load(); render(); } });
+
+  // ---- helpers ----
+  const $ = id => document.getElementById(id);
+  const el = (tag, props = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (k === "class") n.className = v;
+      else if (k === "text") n.textContent = v;
+      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else if (v !== false && v != null) n.setAttribute(k, v === true ? "" : v);
+    }
+    for (const k of kids) if (k != null) n.append(k);
+    return n;
+  };
+  const ago = t => {
+    const s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 60) return "방금";
+    if (s < 3600) return `${Math.floor(s / 60)}분 전`;
+    if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
+    if (s < 86400 * 7) return `${Math.floor(s / 86400)}일 전`;
+    return new Date(t).toLocaleDateString("ko-KR");
+  };
+  function toast(msg) {
+    const t = el("div", { class: "toast", role: "status", text: msg });
+    document.body.append(t);
+    setTimeout(() => t.remove(), 2200);
+  }
+
+  const state = { cat: "all", q: "", sort: "new", open: new Set(), confirming: null, grade: Number(ls.get("sn-grade", "1")) };
+
+  $("myGrade").value = String(state.grade);
+  const syncGrade = () => { $("askAs").textContent = gradeLabel(state.grade); };
+  syncGrade();
+  $("myGrade").addEventListener("change", e => { state.grade = Number(e.target.value); ls.set("sn-grade", String(state.grade)); syncGrade(); render(); });
+
+  for (const c of CATS) $("askCat").append(el("option", { value: c.id, text: c.label }));
+  const drawChips = () => {
+    $("catChips").replaceChildren(...[{ id: "all", label: "전체" }, ...CATS].map(c =>
+      el("button", { type: "button", class: "chip", "aria-pressed": String(state.cat === c.id), text: c.label,
+        onclick: () => { state.cat = c.id; drawChips(); render(); } })));
+  };
+  drawChips();
+  $("search").addEventListener("input", e => { state.q = e.target.value.trim().toLowerCase(); render(); });
+  $("sort").addEventListener("change", e => { state.sort = e.target.value; render(); });
+
+  $("status").replaceChildren(
+    "이 화면은 설치나 로그인 없이 동작하는 체험판이에요. 글은 지금 쓰는 기기의 브라우저에만 저장돼요. ",
+    el("button", { type: "button", class: "ghost", id: "resetBtn", text: "처음 상태로 되돌리기", onclick: () => askReset() }));
+  let resetArmed = false;
+  function askReset() {
+    const b = $("resetBtn");
+    if (!resetArmed) { resetArmed = true; b.textContent = "정말 되돌릴까요? 한 번 더 누르세요"; setTimeout(() => { resetArmed = false; b.textContent = "처음 상태로 되돌리기"; }, 4000); return; }
+    resetArmed = false; b.textContent = "처음 상태로 되돌리기";
+    data = seed(); state.open.clear(); save(); toast("예시 질문만 남기고 모두 지웠어요.");
+  }
+
+  function viewModel() {
+    const byQ = new Map();
+    for (const a of data.answers) { if (!byQ.has(a.qid)) byQ.set(a.qid, []); byQ.get(a.qid).push(a); }
+    const likeN = new Map(), mine = new Set();
+    for (const l of data.likes) { likeN.set(l.qid, (likeN.get(l.qid) || 0) + 1); if (l.uid === uid) mine.add(l.qid); }
+    return data.questions.map(q => {
+      const answers = (byQ.get(q.id) || []).slice().sort((a, b) => a.createdAt - b.createdAt).map(a => ({ ...a, accepted: q.acceptedId === a.id }));
+      return { ...q, answers, answerCount: answers.length, likeCount: likeN.get(q.id) || 0, liked: mine.has(q.id), solved: answers.some(a => a.accepted) };
+    });
+  }
+
+  function render() {
+    let items = viewModel();
+    if (state.cat !== "all") items = items.filter(i => i.cat === state.cat);
+    if (state.q) items = items.filter(i => (i.title + " " + (i.body || "") + " " + i.answers.map(a => a.body).join(" ")).toLowerCase().includes(state.q));
+    if (state.sort === "new") items.sort((a, b) => b.createdAt - a.createdAt);
+    if (state.sort === "like") items.sort((a, b) => b.likeCount - a.likeCount || b.createdAt - a.createdAt);
+    if (state.sort === "open") items = items.filter(i => !i.solved).sort((a, b) => a.answerCount - b.answerCount || b.createdAt - a.createdAt);
+    const kids = items.map(card);
+    if (!kids.length) kids.push(el("div", { class: "empty" }, el("strong", { text: "조건에 맞는 질문이 없어요" }), "분류나 검색어를 바꿔보거나, 직접 질문을 올려보세요."));
+    $("list").replaceChildren(...kids);
+  }
+
+  function card(it) {
+    const open = state.open.has(it.id);
+    const head = el("button", { type: "button", class: "q-head", "aria-expanded": String(open),
+      onclick: () => { open ? state.open.delete(it.id) : state.open.add(it.id); state.confirming = null; render(); } },
+      el("div", { class: "meta" },
+        el("span", { class: "tag", text: catLabel(it.cat) }),
+        it.solved ? el("span", { class: "tag solved", text: "해결됨" }) : null,
+        it.example ? el("span", { class: "tag example", text: "예시" }) : null,
+        el("span", { text: `익명 ${gradeLabel(it.grade)} · ${ago(it.createdAt)}` }),
+        it.authorId === uid ? el("span", { text: "· 내 질문" }) : null),
+      el("p", { class: "q-title", text: it.title }),
+      el("div", { class: "counts" }, el("span", { text: `답변 ${it.answerCount}` }), el("span", { text: `궁금해요 ${it.likeCount}` })));
+    const c = el("article", { class: "card" + (open ? " open" : "") }, head);
+    if (open) c.append(detail(it));
+    return c;
+  }
+
+  function detail(it) {
+    const mineQ = it.authorId === uid;
+    const d = el("div", { class: "detail" });
+    if (it.body) d.append(el("p", { class: "body", text: it.body }));
+    const actions = el("div", { class: "actions" },
+      el("button", { type: "button", class: "like", "aria-pressed": String(it.liked), text: `${it.liked ? "궁금해요 취소" : "나도 궁금해요"} · ${it.likeCount}`, onclick: () => toggleLike(it) }));
+    if (mineQ || it.example) actions.append(confirmable(`q:${it.id}`, "질문 삭제", () => deleteQuestion(it)));
+    d.append(actions);
+
+    const ans = el("div", { class: "answers" }, el("h3", { text: it.answers.length ? `선배들의 답변 ${it.answers.length}` : "아직 답변이 없어요" }));
+    for (const a of it.answers) {
+      const isSenior = seniorRank(a.grade) > seniorRank(it.grade);
+      const isAsker = a.authorId === it.authorId;
+      const row = el("div", { class: "ans" + (a.accepted ? " accepted" : "") },
+        el("div", { class: "meta" },
+          el("span", { class: "who" + (isSenior ? " senior" : ""), text: isAsker ? "질문자" : `익명 ${gradeLabel(a.grade)}${isSenior ? " 선배" : ""}` }),
+          a.accepted ? el("span", { class: "tag solved", text: "채택된 답변" }) : null,
+          el("span", { text: ago(a.createdAt) })),
+        el("p", { class: "body", text: a.body }));
+      const acts = el("div", { class: "actions" });
+      if (mineQ && !isAsker) acts.append(el("button", { type: "button", class: "ghost", text: a.accepted ? "채택 취소" : "이 답변 채택", onclick: () => accept(it, a) }));
+      if (a.authorId === uid) acts.append(confirmable(`a:${a.id}`, "답변 삭제", () => deleteAnswer(a)));
+      if (acts.childNodes.length) row.append(acts);
+      ans.append(row);
+    }
+    d.append(ans);
+
+    const ta = el("textarea", { id: `reply-${it.id}`, maxlength: "1500", placeholder: "내 경험을 바탕으로 알려주세요. 정확하지 않은 부분은 '확실하지 않아요'라고 적어주세요." });
+    d.append(el("form", { class: "reply", autocomplete: "off", onsubmit: e => { e.preventDefault(); postAnswer(it, ta.value); } }, ta,
+      el("div", { class: "reply-foot" },
+        el("span", { text: `익명 ${gradeLabel(state.grade)}${seniorRank(state.grade) > seniorRank(it.grade) ? " 선배" : ""}로 답변해요` }),
+        el("button", { type: "submit", class: "primary", text: "답변 달기" }))));
+    return d;
+  }
+
+  function confirmable(key, label, run) {
+    if (state.confirming !== key) return el("button", { type: "button", class: "ghost", text: label, onclick: () => { state.confirming = key; render(); } });
+    return el("span", { class: "confirm" }, "정말 지울까요?",
+      el("button", { type: "button", text: "지우기", onclick: () => { state.confirming = null; run(); } }),
+      el("button", { type: "button", class: "ghost", text: "그대로 두기", onclick: () => { state.confirming = null; render(); } }));
+  }
+
+  $("askForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const title = $("askTitle").value.trim(), body = $("askBody").value.trim();
+    if (!title) return;
+    const q = { id: rid(), cat: $("askCat").value, grade: state.grade, title, body, authorId: uid, createdAt: Date.now(), acceptedId: null };
+    data.questions.push(q);
+    $("askTitle").value = ""; $("askBody").value = "";
+    state.sort = "new"; $("sort").value = "new"; state.cat = "all"; drawChips(); state.open.add(q.id);
+    save(); toast("질문을 올렸어요. 선배들의 답변을 기다려보세요.");
+  });
+  function postAnswer(it, text) {
+    const body = text.trim(); if (!body) return;
+    data.answers.push({ id: rid(), qid: it.id, body, grade: state.grade, authorId: uid, createdAt: Date.now() });
+    save(); toast("답변을 남겼어요. 고마워요!");
+  }
+  function toggleLike(it) {
+    if (it.liked) data.likes = data.likes.filter(l => !(l.qid === it.id && l.uid === uid));
+    else data.likes.push({ qid: it.id, uid });
+    save();
+  }
+  function accept(it, a) {
+    const q = data.questions.find(x => x.id === it.id); if (!q) return;
+    q.acceptedId = a.accepted ? null : a.id; save(); toast(a.accepted ? "채택을 취소했어요." : "답변을 채택했어요.");
+  }
+  function deleteQuestion(it) {
+    data.questions = data.questions.filter(q => q.id !== it.id);
+    data.answers = data.answers.filter(a => a.qid !== it.id);
+    data.likes = data.likes.filter(l => l.qid !== it.id);
+    state.open.delete(it.id); save(); toast("질문을 지웠어요.");
+  }
+  function deleteAnswer(a) {
+    data.answers = data.answers.filter(x => x.id !== a.id);
+    for (const q of data.questions) if (q.acceptedId === a.id) q.acceptedId = null;
+    save(); toast("답변을 지웠어요.");
+  }
+
+  render();
+  setInterval(() => { if (!document.hidden) render(); }, 60000);
+})();
+</script>
+</body>
+</html>
